@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { site } from "@/data/site";
 import type { ContactMessageInput } from "@/types";
 
 export interface EmailResult {
@@ -15,8 +16,8 @@ const escapeHtml = (s: string) =>
  */
 export async function sendContactNotification(input: ContactMessageInput): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
-  const to = process.env.CONTACT_EMAIL;
-  if (!apiKey || !to) return { sent: false, reason: "email not configured" };
+  const to = process.env.CONTACT_EMAIL || site.email;
+  if (!apiKey) return { sent: false, reason: "RESEND_API_KEY is not configured" };
 
   try {
     const resend = new Resend(apiKey);

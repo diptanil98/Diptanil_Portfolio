@@ -4,6 +4,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { connectToDatabase } from "@/lib/mongodb";
 import { ContactMessage } from "@/models/ContactMessage";
 import { sendContactNotification } from "@/services/email";
+import { site } from "@/data/site";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,17 +58,23 @@ export async function POST(req: NextRequest) {
     return json({ ok: true }); // silent drop for bots
   }
 
+  // Email is the primary delivery path. MongoDB is optional archival storage and
+  // must not prevent a contact message from reaching the site owner.
+  const email = await sendContactNotification(data);
+  if (!email.sent) {
+    console.error("[contact] email delivery failed:", email.reason);
+    return json(
+      { message: `Email delivery is not configured yet. Please email me directly at ${site.email}.` },
+      503,
+    );
+  }
+
   try {
     await connectToDatabase();
     await ContactMessage.create({ ...data, ip });
   } catch (err) {
-    console.error("[contact] failed to store message:", err instanceof Error ? err.message : err);
-    return json({ message: "Couldn't send your message right now. Please email me directly." }, 503);
+    console.warn("[contact] message emailed but not archived:", err instanceof Error ? err.message : err);
   }
-
-  // Best-effort notification: failure must not fail the request.
-  const email = await sendContactNotification(data);
-  if (!email.sent) console.warn("[contact] notification skipped:", email.reason);
 
   return json({ ok: true, message: "Message sent successfully. I'll get back to you soon." }, 201);
 }
